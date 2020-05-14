@@ -62,58 +62,8 @@ def get_motion_model():
     return motion
 
 
-#
-# def potential_field_planning(sx, sy, gx, gy, ox, oy, reso, rr):
-#
-#     # calc potential field
-#     pmap, minx, miny = calc_potential_field(gx, gy, ox, oy, reso, rr)
-#
-#     # search path
-#     d = np.hypot(sx - gx, sy - gy)
-#     ix = round((sx - minx) / reso)
-#     iy = round((sy - miny) / reso)
-#     gix = round((gx - minx) / reso)
-#     giy = round((gy - miny) / reso)
-#
-#     if show_animation:
-#         draw_heatmap(pmap)
-#         # for stopping simulation with the esc key.
-#         plt.gcf().canvas.mpl_connect('key_release_event',
-#                 lambda event: [exit(0) if event.key == 'escape' else None])
-#         plt.plot(ix, iy, "*k")
-#         plt.plot(gix, giy, "*m")
-#
-#     rx, ry = [sx], [sy]
-#     motion = get_motion_model()
-#     while d >= reso:
-#         minp = float("inf")
-#         minix, miniy = -1, -1
-#         for i, _ in enumerate(motion):
-#             inx = int(ix + motion[i][0])
-#             iny = int(iy + motion[i][1])
-#             if inx >= len(pmap) or iny >= len(pmap[0]):
-#                 p = float("inf")  # outside area
-#             else:
-#                 p = pmap[inx][iny]
-#             if minp > p:
-#                 minp = p
-#                 minix = inx
-#                 miniy = iny
-#         ix = minix
-#         iy = miniy
-#         xp = ix * reso + minx
-#         yp = iy * reso + miny
-#         d = np.hypot(gx - xp, gy - yp)
-#         rx.append(xp)
-#         ry.append(yp)
-#
-#         if show_animation:
-#             plt.plot(ix, iy, ".r")
-#             plt.pause(0.005)
-#
-#     print("Goal!!")
-#
-#     return rx, ry
+def calc_goal_potential(pos, goal):
+    return 3 * math.exp(la.norm(np.array(pos) - np.array(goal)) / 30)
 
 
 def calc_static_potential_field(ox, oy, gx, gy, res, rr):
@@ -129,10 +79,9 @@ def calc_static_potential_field(ox, oy, gx, gy, res, rr):
 
     for ix in range(xw):
         x = ix * res + minx
-
         for iy in range(yw):
             y = iy * res + miny
-            ug = calc_attractive_potential(x, y, gx, gy)
+            ug = calc_goal_potential([x, y], [gx, gy])
             uo = calc_repulsive_potential(x, y, ox, oy, rr)
             uf = ug + uo
             pmap[ix][iy] = uf
@@ -141,10 +90,10 @@ def calc_static_potential_field(ox, oy, gx, gy, res, rr):
 
 
 def get_interaction_potential(posA, posB):
-    a = 0.2
+    a = 1
     b = 2
-    ca = 8
-    cr = 1
+    ca = 10
+    cr = 3
     dis = la.norm(np.array(posA) - np.array(posB))
     att_pot = -a * math.exp(-dis / ca)
     rep_pot = b * math.exp(-dis / cr)
@@ -162,24 +111,21 @@ def cal_dynamic_potential_field(curr_pos, id, xw, yw):
     return pmap
 
 
-def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, rr):
-    pmap, minx, miny, maxx, maxy = calc_static_potential_field(ox, oy, gx, gy, res, rr)
-    gix = round((gx - minx) / res)
-    giy = round((gy - miny) / res)
+def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
+    minx = xvals[0]
+    maxx = xvals[1]
+    miny = yvals[0]
+    maxy = yvals[1]
     xw = int(round((maxx - minx) / res))
     yw = int(round((maxy - miny) / res))
 
     pdmap = cal_dynamic_potential_field(curr_pos, id, xw, yw)
     synthesized_map = np.array(pmap) + np.array(pdmap)
-    if show_animation:
-        draw_heatmap(pmap)
-        plt.gcf().canvas.mpl_connect('key_release_event',
-                lambda event: [exit(0) if event.key == 'escape' else None])
-        plt.plot(gix, giy, "*m")
 
-        ix = round((curr_pos[id][0] - minx) / res)
-        iy = round((curr_pos[id][1] - miny) / res)
-        plt.plot(ix, iy, "*k")
+    ix = round((curr_pos[id][0] - minx) / res)
+    iy = round((curr_pos[id][1] - miny) / res)
+    if show_animation:
+        plt.plot(ix, iy, "*r")
 
     motion = get_motion_model()
     minp = float("inf")
@@ -201,11 +147,8 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, rr):
     yp = iy * res + miny
     curr_pos[id] = [xp, yp]
     # d = np.hypot(gx - xp, gy - yp)
-    # rx.append(xp)
-    # ry.append(yp)
 
     if show_animation:
-    #     plt.plot(xp, yp, ".r")
         plt.pause(0.001)
     return curr_pos
 
@@ -218,14 +161,15 @@ def draw_heatmap(data):
 def main():
     print("potential_field_planning start")
 
-    curr_pos = [[0, 10],
-                [0, 5],
-                [5, 10]]
+    curr_pos = [[5, 8],
+                [3, 5],
+                [8, 6]]
 
     gx = 30.0  # goal x position [m]
     gy = 30.0  # goal y position [m]
+
     grid_size = 0.5  # potential grid size [m]
-    robot_radius = 2.0  # robot radius [m]
+    robot_radius = 5.0  # robot radius [m]
 
     ox = [15.0, 5.0, 20.0, 25.0]  # obstacle x position list [m]
     oy = [25.0, 15.0, 26.0, 25.0]  # obstacle y position list [m]
@@ -234,10 +178,24 @@ def main():
         plt.grid(True)
         plt.axis("equal")
 
+    pmap, minx, miny, maxx, maxy = calc_static_potential_field(ox, oy, gx, gy, grid_size, robot_radius)
+
+    gix = round((gx - minx) / grid_size)
+    giy = round((gy - miny) / grid_size)
+
+    if show_animation:
+        draw_heatmap(pmap)
+        plt.plot(gix, giy, "*m")
+        plt.gcf().canvas.mpl_connect('key_release_event',
+                lambda event: [exit(0) if event.key == 'escape' else None])
+
+    xvals = [minx, maxx]
+    yvals = [miny, maxy]
+
     # path generation
-    for it in range(20):
+    for it in range(60):
         for r in range(len(curr_pos)):
-            curr_pos = calc_next_position(r, curr_pos, gx, gy, ox, oy, grid_size, robot_radius)
+            curr_pos = calc_next_position(r, curr_pos, gx, gy, ox, oy, grid_size, pmap, xvals, yvals)
 
     if show_animation:
         plt.show()
