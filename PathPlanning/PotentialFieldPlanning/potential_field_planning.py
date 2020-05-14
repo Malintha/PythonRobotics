@@ -125,7 +125,7 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
     ix = round((curr_pos[id][0] - minx) / res)
     iy = round((curr_pos[id][1] - miny) / res)
     if show_animation:
-        plt.plot(ix, iy, "*r")
+        plt.plot(ix, iy, "-*r")
 
     motion = get_motion_model()
     minp = float("inf")
@@ -149,13 +149,13 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
     # d = np.hypot(gx - xp, gy - yp)
 
     if show_animation:
-        plt.pause(0.001)
+        plt.pause(0.0001)
     return curr_pos
 
 
 def draw_heatmap(data):
     data = np.array(data).T
-    plt.pcolor(data, vmax=100.0, cmap=plt.cm.Blues)
+    plt.pcolor(data, vmax=20.0, cmap=plt.cm.Blues)
 
 
 def main():
