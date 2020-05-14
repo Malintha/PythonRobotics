@@ -13,39 +13,29 @@ import numpy as np
 import math
 from numpy import linalg as la
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
 
 # Parameters
 KP = 5.0  # attractive potential gain
-ETA = 100.0  # repulsive potential gain
+ETA = 2.0  # repulsive potential gain
 AREA_WIDTH = 30.0  # potential area width [m]
 
 show_animation = True
 
 
-def calc_attractive_potential(x, y, gx, gy):
-    return 0.5 * KP * np.hypot(x - gx, y - gy)
+def set_obstacle_potential(xw, yw, ox, oy, res):
+    pmap = [[0.0 for i in range(yw)] for i in range(xw)]
+    obslen = 5
+    leni = int(round(obslen/res))
+    sidelen = int(round(leni/2))
+    for o in range(len(ox)):
+        xval = int(ox[o])
+        yval = int(oy[o])
+        for l in range(-sidelen, sidelen):
+            for w in range(-sidelen, sidelen):
+                pmap[w+yval][l+xval] = 10
 
-
-def calc_repulsive_potential(x, y, ox, oy, rr):
-    # search nearest obstacle
-    minid = -1
-    dmin = float("inf")
-    for i, _ in enumerate(ox):
-        d = np.hypot(x - ox[i], y - oy[i])
-        if dmin >= d:
-            dmin = d
-            minid = i
-
-    # calc repulsive potential
-    dq = np.hypot(x - ox[minid], y - oy[minid])
-
-    if dq <= rr:
-        if dq <= 0.1:
-            dq = 0.1
-
-        return 0.5 * ETA * (1.0 / dq - 1.0 / rr) ** 2
-    else:
-        return 0.0
+    return gaussian_filter(pmap, sigma=1)
 
 
 def get_motion_model():
@@ -67,10 +57,10 @@ def calc_goal_potential(pos, goal):
 
 
 def calc_static_potential_field(ox, oy, gx, gy, res, rr):
-    minx = min(ox) - AREA_WIDTH / 2.0
-    miny = min(oy) - AREA_WIDTH / 2.0
-    maxx = max(ox) + AREA_WIDTH / 2.0
-    maxy = max(oy) + AREA_WIDTH / 2.0
+    minx = 0
+    miny = 0
+    maxx = AREA_WIDTH
+    maxy = AREA_WIDTH
     xw = int(round((maxx - minx) / res))
     yw = int(round((maxy - miny) / res))
 
@@ -81,12 +71,12 @@ def calc_static_potential_field(ox, oy, gx, gy, res, rr):
         x = ix * res + minx
         for iy in range(yw):
             y = iy * res + miny
-            ug = calc_goal_potential([x, y], [gx, gy])
-            uo = calc_repulsive_potential(x, y, ox, oy, rr)
-            uf = ug + uo
-            pmap[ix][iy] = uf
+            pmap[iy][ix] = calc_goal_potential([x, y], [gx, gy])
 
-    return pmap, minx, miny, maxx, maxy
+    pmap = np.array(pmap)
+    op = set_obstacle_potential(xw, yw, ox, oy, res)
+
+    return pmap+op, minx, miny, maxx, maxy
 
 
 def get_interaction_potential(posA, posB):
@@ -116,6 +106,8 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
     maxx = xvals[1]
     miny = yvals[0]
     maxy = yvals[1]
+    # minx = miny = 0
+
     xw = int(round((maxx - minx) / res))
     yw = int(round((maxy - miny) / res))
 
@@ -125,7 +117,7 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
     ix = round((curr_pos[id][0] - minx) / res)
     iy = round((curr_pos[id][1] - miny) / res)
     if show_animation:
-        plt.plot(ix, iy, "-*r")
+        plt.plot(ix, iy, "*r")
 
     motion = get_motion_model()
     minp = float("inf")
@@ -136,7 +128,7 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
         if inx >= len(pmap) or iny >= len(pmap[0]):
             p = float("inf")  # outside area
         else:
-            p = synthesized_map[inx][iny]
+            p = synthesized_map[iny][inx]
         if minp > p:
             minp = p
             minix = inx
@@ -149,12 +141,12 @@ def calc_next_position(id, curr_pos, gx, gy, ox, oy, res, pmap, xvals, yvals):
     # d = np.hypot(gx - xp, gy - yp)
 
     if show_animation:
-        plt.pause(0.0001)
+        plt.pause(0.01)
     return curr_pos
 
 
 def draw_heatmap(data):
-    data = np.array(data).T
+    data = np.array(data)
     plt.pcolor(data, vmax=20.0, cmap=plt.cm.Blues)
 
 
@@ -171,8 +163,8 @@ def main():
     grid_size = 0.5  # potential grid size [m]
     robot_radius = 5.0  # robot radius [m]
 
-    ox = [15.0, 5.0, 20.0, 25.0]  # obstacle x position list [m]
-    oy = [25.0, 15.0, 26.0, 25.0]  # obstacle y position list [m]
+    ox = [30]  # obstacle x position list [m]
+    oy = [25]  # obstacle y position list [m]
 
     if show_animation:
         plt.grid(True)
@@ -193,7 +185,7 @@ def main():
     yvals = [miny, maxy]
 
     # path generation
-    for it in range(60):
+    for it in range(50): # num of iterations
         for r in range(len(curr_pos)):
             curr_pos = calc_next_position(r, curr_pos, gx, gy, ox, oy, grid_size, pmap, xvals, yvals)
 
